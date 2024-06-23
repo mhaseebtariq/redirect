@@ -1,0 +1,15 @@
+--index-url=https://pypi.python.org/simple
+
+numpy==2.0.0
+pandas==2.2.2
+pyspark==3.5.1
+igraph==0.11.5
+notebook==7.2.1
+notebook_shim==0.2.4
+jupyterlab==4.2.2
+jupyterlab_pygments==0.3.0
+jupyterlab_server==2.27.2
+jupyter_client==8.6.2
+leidenalg==0.10.2
+seaborn==0.13.2
+fastparquet==2024.5.0
