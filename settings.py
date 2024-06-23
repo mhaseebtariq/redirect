@@ -9,7 +9,6 @@ assert FILE_SIZE in VALID_SIZES
 ILLICIT_TYPE = "HI" if HIGH_ILLICIT else "LI"
 MAIN_LOCATION = os.path.join(os.path.curdir, "synthetic-data")
 STAGED_DATA_LOCATION = os.path.join(MAIN_LOCATION, "staged-transactions")
-STAGED_FILTERED_DATA_LOCATION = os.path.join(MAIN_LOCATION, "staged-filtered-transactions")
 STAGED_CASES_DATA_LOCATION = os.path.join(MAIN_LOCATION, "staged-cases-transactions.parquet")
 STAGED_DATA_CSV_LOCATION = os.path.join(MAIN_LOCATION, "staged-transactions.csv")
 STAGED_PATTERNS_CSV_LOCATION = os.path.join(MAIN_LOCATION, "staged-patterns.txt")
