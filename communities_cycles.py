@@ -1,7 +1,7 @@
 import pickle
 import sys
 
-THRESHOLD_SIZE = 500
+THRESHOLD_SIZE = 1000
 
 
 def get_top_n(sub_g, queries):
