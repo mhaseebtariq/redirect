@@ -2,8 +2,6 @@ import pickle
 import sys
 
 THRESHOLD_RANK = 1e-2
-NEIGHBORS_ONLY = False
-PPR_THRESHOLD_ONLY = False
 
 
 def get_top_n(sub_graph, queries):
@@ -33,21 +31,15 @@ if __name__ == "__main__":
         nodes = pickle.load(f)
 
     communities = []
-    for node in nodes[chunk_number]:
+    for node, x, y in nodes[chunk_number]:
         neighborhood = graph.neighborhood(node, order=1, mode="all", mindist=0)
         neighborhood = {x["name"] for x in graph.vs(neighborhood)}
-        if NEIGHBORS_ONLY:
-            communities.append((node, neighborhood))
-        else:
-            sub_g = graph.induced_subgraph(neighborhood)
-            if PPR_THRESHOLD_ONLY:
-                communities.append((node, get_top_n(sub_g, [node])))
-            else:
-                shortest_paths = sub_g.get_shortest_paths(
-                    node, to=neighborhood, weights="weight", mode="all"
-                )
-                for path in shortest_paths:
-                    communities.append((node, get_top_n(sub_g, path)))
+        sub_g = graph.induced_subgraph(neighborhood)
+        shortest_paths = sub_g.get_shortest_paths(
+            node, to=[x, y], weights="weight", mode="all"
+        )
+        for path in shortest_paths:
+            communities.append((node, get_top_n(sub_g, path)))
     print(f"Done -> {chunk_number}")
 
     filename = f"./staging/communities-{chunk_number}.pickle"
