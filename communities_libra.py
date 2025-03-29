@@ -19,7 +19,7 @@ def get_top_n(sub_graph, queries):
         reverse=True,
         key=lambda x: x[1],
     )
-    return {x[0] for x in ranks if x[1] >= THRESHOLD_RANK}
+    return {x[0] for x in ranks if x[1] > THRESHOLD_RANK}
 
 
 if __name__ == "__main__":
@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     communities = []
     for node in nodes[chunk_number]:
-        neighborhood = graph.neighborhood(node, order=2, mode="all", mindist=0)
+        neighborhood = graph.neighborhood(node, order=1, mode="all", mindist=0)
         neighborhood = {x["name"] for x in graph.vs(neighborhood)}
         if NEIGHBORS_ONLY:
             communities.append((node, neighborhood))

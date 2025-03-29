@@ -1,107 +1,168 @@
 import os
 import sys
-from collections import Counter
-from datetime import datetime, date, timedelta
 
-import shutil
 import numpy as np
 import pandas as pd
+import igraph as ig
+
+
+currency_rates = {
+    "jpy": np.float32(0.009487665410827868),
+    "cny": np.float32(0.14930721887033868),
+    "cad": np.float32(0.7579775434031815),
+    "sar": np.float32(0.2665884611958837),
+    "aud": np.float32(0.7078143121927827),
+    "ils": np.float32(0.29612081311363503),
+    "chf": np.float32(1.0928961554056371),
+    "usd": np.float32(1.0),
+    "eur": np.float32(1.171783425225877),
+    "rub": np.float32(0.012852809604990688),
+    "gbp": np.float32(1.2916554735187644),
+    "btc": np.float32(11879.132698717296),
+    "inr": np.float32(0.013615817231245796),
+    "mxn": np.float32(0.047296753463246695),
+    "brl": np.float32(0.1771008654705292),
+}
 
 types = {
-    "number_of_sources": np.uint16,
-    "number_of_targets": np.uint16,
-    "max_density_in": np.uint16,
-    "max_density_out": np.uint16,
-    "number_of_transactions": np.uint16,
-    "number_of_currencies": np.uint8,
+    "key": str,
+    "num_source_or_target": np.uint16,
+    "num_source_and_target": np.uint16,
+    "num_source_only": np.uint16,
+    "num_target_only": np.uint16,
+    "num_transactions": np.uint16,
+    "num_currencies": np.uint16,
+    "num_source_or_target_bank": np.uint16,
+    "num_source_and_target_bank": np.uint16,
+    "num_source_only_bank": np.uint16,
+    "num_target_only_bank": np.uint16,
+    "turnover": np.uint64,
     "ts_range": np.uint32,
-    "ts_std": np.uint32,
+    "ts_std": np.float64,
+    "assortativity_degree": np.float64,
+    "max_degree": np.uint16,
+    "max_degree_in": np.uint16,
+    "max_degree_out": np.uint16,
+    "diameter": np.uint8,
+    "assortativity_degree_bank": np.float64,
+    "max_degree_bank": np.uint16,
+    "max_degree_in_bank": np.uint16,
+    "max_degree_out_bank": np.uint16,
+    "diameter_bank": np.uint8,
+    "usd": np.float32,
     "btc": np.float32,
-    "ils": np.uint64,
-    "eur": np.uint64,
-    "jpy": np.uint64,
-    "usd": np.uint64,
-    "cad": np.uint64,
-    "mxn": np.uint64,
-    "cny": np.uint64,
-    "gbp": np.uint64,
-    "rub": np.uint64,
-    "chf": np.uint64,
-    "inr": np.uint64,
-    "brl": np.uint64,
-    "sar": np.uint64,
-    "aud": np.uint64,
+    "chf": np.float32,
+    "gbp": np.float32,
+    "inr": np.float32,
+    "jpy": np.float32,
+    "rub": np.float32,
+    "aud": np.float32,
+    "mxn": np.float32,
+    "ils": np.float32,
+    "cad": np.float32,
+    "brl": np.float32,
+    "sar": np.float32,
+    "cny": np.float32,
+    "eur": np.float32,
 }
-all_features_columns = set(types.keys())
 
 
-def generate_features(df):
-    max_density = lambda x: Counter(x).most_common()[0][1]
-    amount_curr = lambda x: x.to_dict()["amount"]
-    other_features = df.groupby("id").agg(
-        number_of_sources=("source", "nunique"),
-        number_of_targets=("target", "nunique"),
-        max_density_in=("source", max_density),
-        max_density_out=("target", max_density),
-        number_of_transactions=("timestamp", "count"),
-        number_of_currencies=("currency", "nunique"),
-        ts_min=("timestamp", "min"),
-        ts_max=("timestamp", "max"),
-        ts_std=("timestamp", "std"),
+def get_segments(source_column, target_column, data_in):
+    sources = set(data_in[source_column].unique())
+    targets = set(data_in[target_column].unique())
+    source_or_target = sources.union(targets)
+    source_and_target = sources.intersection(targets)
+    source_only = sources.difference(targets)
+    target_only = targets.difference(sources)
+    return source_or_target, source_and_target, source_only, target_only
+
+
+def generate_features(df, group_id):
+    source_or_target, source_and_target, source_only, target_only = get_segments(
+        "source", "target", df
     )
-    amount_features = df.groupby(["id", "currency"]).agg(
-        {"amount": "sum"}
-    ).reset_index().set_index("currency").groupby("id")[["id", "amount"]].apply(amount_curr)
-    amount_features = pd.DataFrame(amount_features.tolist(), index=amount_features.index).fillna(0)
-    
-    all_features = other_features.join(amount_features, how="left").fillna(0)
-    all_features.loc[:, "ts_range"] = all_features.loc[:, "ts_max"] - all_features.loc[:, "ts_min"]
-    del all_features["ts_min"]
-    del all_features["ts_max"]
-    available_columns = set(all_features.columns)
-    missing_features = available_columns.symmetric_difference(all_features_columns)
-    for missing in missing_features:
-        all_features.loc[:, missing] = 0
-    all_features = all_features.astype(types)
-    return all_features
+    features_row = {
+        "key": group_id,
+        "num_source_or_target": len(source_or_target),
+        "num_source_and_target": len(source_and_target),
+        "num_source_only": len(source_only),
+        "num_target_only": len(target_only),
+        "num_transactions": df.shape[0],
+        "num_currencies": df["currency"].nunique(),
+    }
+    source_or_target, source_and_target, source_only, target_only = get_segments(
+        "source_bank", "target_bank", df
+    )
+    features_row["num_source_or_target_bank"] = len(source_or_target)
+    features_row["num_source_and_target_bank"] = len(source_and_target)
+    features_row["num_source_only_bank"] = len(source_only)
+    features_row["num_target_only_bank"] = len(target_only)
+
+    left = (
+        df.loc[:, ["target", "currency", "amount"]]
+        .rename(columns={"target": "source"})
+        .groupby(["source", "currency"])
+        .agg({"amount": "sum"})
+    )
+    right = df.groupby(["source", "currency"]).agg({"amount": "sum"})
+    result = left.join(right, how="outer", lsuffix="_left").fillna(0).reset_index()
+    result.loc[:, "delta"] = result["amount_left"] - result["amount"]
+    turnover_currency = result[result["delta"] > 0].reset_index(drop=True)
+    turnover_currency = (
+        turnover_currency.groupby("currency").agg({"delta": "sum"}).to_dict()["delta"]
+    )
+
+    left = (
+        df.loc[:, ["target", "amount_usd"]]
+        .rename(columns={"target": "source"})
+        .groupby("source")
+        .agg({"amount_usd": "sum"})
+    )
+    right = df.groupby("source").agg({"amount_usd": "sum"})
+    result = left.join(right, how="outer", lsuffix="_left").fillna(0).reset_index()
+    result.loc[:, "delta"] = result["amount_usd_left"] - result["amount_usd"]
+    turnover = float(result[result["delta"] > 0]["delta"].sum())
+    turnover_currency_norm = {}
+    for key, value in turnover_currency.items():
+        turnover_currency_norm[key] = float((currency_rates[key] * value) / turnover)
+
+    features_row["turnover"] = turnover
+    features_row.update(turnover_currency_norm)
+
+    features_row["ts_range"] = df["timestamp"].max() - df["timestamp"].min()
+    features_row["ts_std"] = df["timestamp"].std()
+
+    graph = ig.Graph.DataFrame(df[["source", "target"]], use_vids=False, directed=True)
+    features_row["assortativity_degree"] = graph.assortativity_degree(directed=True)
+    features_row["max_degree"] = max(graph.degree(mode="all"))
+    features_row["max_degree_in"] = max(graph.degree(mode="in"))
+    features_row["max_degree_out"] = max(graph.degree(mode="out"))
+    features_row["diameter"] = graph.diameter(directed=True, unconn=True)
+
+    graph = ig.Graph.DataFrame(
+        df[["source_bank", "target_bank"]], use_vids=False, directed=True
+    )
+    features_row["assortativity_degree_bank"] = graph.assortativity_degree(
+        directed=True
+    )
+    features_row["max_degree_bank"] = max(graph.degree(mode="all"))
+    features_row["max_degree_in_bank"] = max(graph.degree(mode="in"))
+    features_row["max_degree_out_bank"] = max(graph.degree(mode="out"))
+    features_row["diameter_bank"] = graph.diameter(directed=True, unconn=True)
+
+    return features_row
 
 
 if __name__ == "__main__":
     part_file = sys.argv[1].strip()
+    part = os.path.basename(part_file).split(".")[0]
     location_features = sys.argv[2].strip()
-    date_first = sys.argv[3].strip().split("-")
-    date_last = sys.argv[4].strip().split("-")
-    date_first = date(*[int(x) for x in date_first])
-    date_last = date(*[int(x) for x in date_last])
-    dates = [x.date() for x in pd.date_range(date_first, date_last)]
-    max_timestamp = int((max(dates) + timedelta(days=1)).strftime("%s")) * 1e3
 
     df_part = pd.read_parquet(part_file)
-    part = os.path.basename(part_file).split(".")[0]
+    features_all = []
+    for key_, group in df_part.groupby("id"):
+        features_all.append(generate_features(group, key_))
 
-    window_sizes = [2, 3, 4, 8, 12, 15, 22, 29, 37, 72]
-    max_date = datetime.combine(max(dates), datetime.min.time())
-    for window_size in window_sizes:
-        window_data = []
-        for window in dates:
-            window_start = datetime.combine(window, datetime.min.time())
-            window_end = window_start + timedelta(days=window_size)
-            window_start_ts = window_start.timestamp()
-            window_end_ts = window_end.timestamp()
-            if window_end > max_date:
-                continue
-            df_window = df_part.loc[
-                (df_part["timestamp"] >= window_start_ts) & (df_part["timestamp"] < window_end_ts), :
-            ].copy(deep=True)
-            features = generate_features(df_window)
-            features.loc[:, "window_size"] = np.uint8(window_size)
-            features.loc[:, "day_number"] = np.uint8((window - date_first).days + 1)
-            window_data.append(features.reset_index().astype({"id": np.uint32}))
-        
-        features_folder = f"{location_features}/window-{window_size}/"
-        try:
-            os.mkdir(features_folder)
-        except FileExistsError:
-            pass
-        pd.concat(window_data, ignore_index=True).to_parquet(f"{features_folder}{part}.parquet")
-    print(f"Done -> {part}")
+    pd.DataFrame(features_all).astype(types).to_parquet(
+        f"{location_features}{os.sep}{part}.parquet"
+    )
