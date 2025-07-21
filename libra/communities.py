@@ -31,8 +31,11 @@ def get_communities_chunk(args):
     graph_chunk = load_dump(graph_loc)
     communities_chunk = []
     for node, query in load_dump(queries_loc):
-        neighborhood = graph_chunk.neighborhood(node, order=order, mode=mode, mindist=0)
-        sub_g = graph_chunk.induced_subgraph(neighborhood)
+        if order == -1:
+            sub_g = graph_chunk
+        else:
+            neighborhood = graph_chunk.neighborhood(node, order=order, mode=mode, mindist=0)
+            sub_g = graph_chunk.induced_subgraph(neighborhood)
         communities_chunk.append((node, get_top_n(sub_g, query, threshold, weight_column)))
     return communities_chunk
 
