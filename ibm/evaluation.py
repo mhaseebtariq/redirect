@@ -1,4 +1,18 @@
-def cw_confusion_matrix(flows_statistics, anomalous_communities, largest_comm_size, anomalies_input):
+from collections import defaultdict
+
+
+def cw_confusion_matrix(flows_statistics, anomalous_communities, largest_comm_size, anomalies_input, flows_hash_table):
+    comms_hash = defaultdict(list)
+    for comm_id, comm in anomalous_communities.items():
+        for n_id in comm:
+            comms_hash[comm_id] += flows_hash_table[n_id]
+    comms_hash = {k: set(v) for k, v in comms_hash.items()}
+    comms_hash_rev = defaultdict(list)
+    for comm_id, f_ids in comms_hash.items():
+        for f_id in f_ids:
+            comms_hash_rev[f_id].append(comm_id)
+    comms_hash_rev = {k: set(v) for k, v in comms_hash_rev.items()}
+    
     matches = []
     not_found = []
     for index, stats in flows_statistics.iterrows():
@@ -6,12 +20,11 @@ def cw_confusion_matrix(flows_statistics, anomalous_communities, largest_comm_si
         turnover_weight = stats["turnover_weight"]
         flow_nodes = set(turnover_weight.keys())
         candidates = []
-        for comm_id, comm in anomalous_communities.items():
-            matched = flow_nodes.intersection(comm)
-            if len(matched):
-                matched_score = sum([turnover_weight[x] for x in matched])
-                non_matched = set(comm) - matched
-                candidates.append((matched_score, matched, non_matched, turnover_weight, comm_id))
+        for to_match_with in comms_hash_rev.get(key, []):
+            matched = flow_nodes.intersection(anomalous_communities[to_match_with])
+            matched_score = sum([turnover_weight[x] for x in matched])
+            non_matched = set(comm) - matched
+            candidates.append((matched_score, matched, non_matched, turnover_weight, comm_id))
         to_score = float(stats["turnover_score"])
         if candidates:
             best = sorted(candidates, reverse=True, key=lambda x: (x[0], -len(x[2])))[0]
