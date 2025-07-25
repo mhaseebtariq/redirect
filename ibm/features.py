@@ -150,7 +150,7 @@ def generate_features(df, row, graph_features=False):
     features_row["ts_weighted_std"] = weighted_std(exploded["ts"], exploded["amount"])
 
     if graph_features:
-        graph = ig.Graph.DataFrame(df[["source", "target", "amount"]], use_vids=False, directed=True)
+        graph = ig.Graph.DataFrame(df[["source", "target"]], use_vids=False, directed=True)
         features_row["assortativity_degree"]= graph.assortativity_degree(directed=True)
         features_row["assortativity_degree_ud"] = graph.assortativity_degree(directed=False)
         features_row["max_degree"] = max(graph.degree(mode="all"))
@@ -162,6 +162,19 @@ def generate_features(df, row, graph_features=False):
         biconn_components, articulation_points = graph.biconnected_components(return_articulation_points=True)
         features_row["num_biconn_components"] = len(biconn_components) 
         features_row["num_articulation_points"] = len(articulation_points)
+        graph = ig.Graph.DataFrame(
+            df[["source_bank", "target_bank"]], use_vids=False, directed=True
+        )
+        features_row["assortativity_degree_bank"] = graph.assortativity_degree(
+            directed=True
+        )
+        features_row["assortativity_degree_bank_ud"] = graph.assortativity_degree(
+            directed=False
+        )
+        features_row["max_degree_bank"] = max(graph.degree(mode="all"))
+        features_row["max_degree_in_bank"] = max(graph.degree(mode="in"))
+        features_row["max_degree_out_bank"] = max(graph.degree(mode="out"))
+        features_row["diameter_bank"] = graph.diameter(directed=True, unconn=True)
 
     return features_row
 
@@ -220,4 +233,4 @@ def generate_features_spark(communities, graph, spark):
         generate_features_udf_wrapper(True), schema=SCHEMA_FEAT_UDF
     ).toPandas()
     
-    return pd.DataFrame(response["features"].apply(json.loads).tolist())  # .astype(FEATURE_TYPES)
+    return pd.DataFrame(response["features"].apply(json.loads).tolist())
