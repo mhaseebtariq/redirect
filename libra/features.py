@@ -72,7 +72,7 @@ def generate_features(df, row, graph_features=False):
     features_row["turnover"] = turnover
 
     if graph_features:
-        graph = ig.Graph.DataFrame(df[["source", "target", "amount"]], use_vids=False, directed=True)
+        graph = ig.Graph.DataFrame(df[["source", "target"]], use_vids=False, directed=True)
         features_row["assortativity_degree"]= graph.assortativity_degree(directed=True)
         features_row["assortativity_degree_ud"] = graph.assortativity_degree(directed=False)
         features_row["max_degree"] = max(graph.degree(mode="all"))
@@ -127,7 +127,7 @@ def generate_features_spark(communities, graph, spark):
             pd.concat(df_comms, ignore_index=True).to_parquet(f"{MULTI_PROC_STAGING_LOCATION}{os.sep}{index + 1}.parquet")
             df_comms = []
     
-    if len(df_comms) > 1:
+    if len(df_comms) > 0:
         partitions += 6
         pd.concat(df_comms, ignore_index=True).to_parquet(f"{MULTI_PROC_STAGING_LOCATION}{os.sep}{index + 1}.parquet")
     
