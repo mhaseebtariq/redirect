@@ -1,6 +1,5 @@
 import os
 import pickle
-import random
 import sys
 import uuid
 
@@ -30,17 +29,18 @@ def get_communities_chunk(args):
     queries_loc, graph_loc, order, mode, threshold, weight_column = args
     graph_chunk = load_dump(graph_loc)
     communities_chunk = []
-    for node, query in load_dump(queries_loc):
+    for node, neighborhood in load_dump(queries_loc):
         if order == -1:
             sub_g = graph_chunk
         else:
-            neighborhood = graph_chunk.neighborhood(node, order=order, mode=mode, mindist=0)
+            # neighborhood = graph_chunk.neighborhood(node, order=order, mode=mode, mindist=0)
             sub_g = graph_chunk.induced_subgraph(neighborhood)
-        communities_chunk.append((node, get_top_n(sub_g, query, threshold, weight_column)))
+        communities_chunk.append((node, get_top_n(sub_g, [node], threshold, weight_column)))
     return communities_chunk
 
 
 def get_communities_spark(queries, graph, num_procs, spark, order, mode, threshold, weight_column):
+    queries = sorted(queries.items(), key=lambda x: x[0])
     queries_locs, params = create_workload_for_multi_proc(len(queries), queries, num_procs, graph, shuffle=True)
     del queries
     graph_location = params[0]

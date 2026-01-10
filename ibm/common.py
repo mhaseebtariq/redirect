@@ -11,10 +11,10 @@ from pathlib import Path
 import pandas as pd
 import psutil
 
-from settings import OUTPUT_POSTFIX
+random.seed(int(os.environ.get("EXSTRAQT_SEED", 42)))
 
 MULTI_PROC_ROOT = Path("multiprocessing")
-MULTI_PROC_STAGING_LOCATION = MULTI_PROC_ROOT / OUTPUT_POSTFIX[1:]
+MULTI_PROC_STAGING_LOCATION = MULTI_PROC_ROOT / os.environ["EXSTRAQT_DATA_TYPE_FOLDER"]
 OUTPUT_EXT = ".pickle"
 PROC_ARGS_SEPARATOR = "__0__"
 

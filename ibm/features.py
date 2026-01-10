@@ -15,6 +15,7 @@ from common import reset_multi_proc_staging, load_dump, create_workload_for_mult
 
 
 SCHEMA_FEAT_UDF = st.StructType([st.StructField("features", st.StringType())])
+
 CURRENCY_RATES = {
     "jpy": np.float32(0.009487665410827868),
     "cny": np.float32(0.14930721887033868),
@@ -34,16 +35,6 @@ CURRENCY_RATES = {
 }
 
 
-def get_segments(source_column, target_column, data_in):
-    sources = set(data_in[source_column].unique())
-    targets = set(data_in[target_column].unique())
-    source_or_target = sources.union(targets)
-    source_and_target = sources.intersection(targets)
-    source_only = sources.difference(targets)
-    target_only = targets.difference(sources)
-    return sources, targets, source_or_target, source_and_target, source_only, target_only
-
-
 def weighted_quantiles(values, weights, quantiles=0.5, interpolate=True):
     i = values.argsort()
     sorted_weights = weights[i]
@@ -61,6 +52,16 @@ def weighted_std(values, weights):
     average = np.average(values, weights=weights)
     variance = np.average((values-average)**2, weights=weights)
     return np.sqrt(variance)
+
+
+def get_segments(source_column, target_column, data_in):
+    sources = set(data_in[source_column].unique())
+    targets = set(data_in[target_column].unique())
+    source_or_target = sources.union(targets)
+    source_and_target = sources.intersection(targets)
+    source_only = sources.difference(targets)
+    target_only = targets.difference(sources)
+    return sources, targets, source_or_target, source_and_target, source_only, target_only
 
 
 def generate_features(df, row, graph_features=False):
@@ -256,3 +257,31 @@ def generate_features_spark(communities, graph_data, spark, num_cores=os.cpu_cou
     ).toPandas()
     
     return pd.DataFrame(response["features"].apply(json.loads).tolist())
+
+
+def get_edge_features_udf(df):
+    row = df.iloc[0]
+    src, tgt = row["source"], row["target"]
+    
+    currency_turnover = (
+        df
+        .groupby("source_currency")
+        .agg({"source_amount": "sum"})
+    ).to_dict()["source_amount"]
+    total = df["amount"].sum()
+    currency_turnover = {k: v / total for k, v in currency_turnover.items()}
+    row = {
+        "source": src, "target": tgt, 
+        "total_amount": total, 
+        "related_for": df["max_ts"].max() - df["min_ts"].min()
+    }
+    row.update(currency_turnover)
+    format_turnover = (
+        df
+        .groupby("format")
+        .agg({"amount": "sum"})
+    ).to_dict()["amount"]
+    format_turnover = {k.lower().replace(" ", "_"): v / total for k, v in format_turnover.items()}
+    row.update(format_turnover)
+    
+    return pd.DataFrame([json.dumps(row, allow_nan=True, cls=NpEncoder)], columns=["features"])
